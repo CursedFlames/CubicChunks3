@@ -35,6 +35,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -50,6 +51,14 @@ public class IntegrationTestCubicChunkMap {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         SharedConstants.IS_RUNNING_IN_IDE = true;
+    }
+
+    @AfterEach
+    public void afterEach() {
+        // For some reason mockito is keeping around inline mocks when no reference to them exists, so we force it to clear them after each test.
+        // This was creating a strange issue where running a subset of tests would OOME only when running under gradle, but not intellij.
+        // Probably a mockito bug?
+        Mockito.framework().clearInlineMocks();
     }
 
     private CloseableReference<ServerChunkCache> createServerChunkCache() throws IOException {

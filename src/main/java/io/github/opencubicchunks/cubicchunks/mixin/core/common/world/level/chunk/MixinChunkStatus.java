@@ -18,7 +18,6 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -30,8 +29,7 @@ public class MixinChunkStatus {
                             ThreadedLevelLightEngine pLightEngine, Function<CloAccess, CompletableFuture<Either<CloAccess, ChunkHolder.ChunkLoadingFailure>>> pTask,
                             List<CloAccess> pCache, CallbackInfoReturnable<CompletableFuture<Either<CloAccess, ChunkHolder.ChunkLoadingFailure>>> cir) {
         CloAccess chunkaccess = pCache.get(pCache.size() / 2);
-        // Uncommenting this check causes issues running all tests for *some reason*
-//        if (chunkaccess instanceof ChunkAccess) return;
+        if (chunkaccess instanceof ChunkAccess) return;
         cir.setReturnValue(((Object) this == ChunkStatus.FULL ? pTask.apply(chunkaccess) : CompletableFuture.completedFuture(Either.left(chunkaccess)))
             .thenApply(
                 p_281217_ -> {
