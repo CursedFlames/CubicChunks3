@@ -25,26 +25,27 @@ import io.github.notstirred.dasm.api.annotations.selector.FieldSig;
 import io.github.notstirred.dasm.api.annotations.selector.MethodSig;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
-import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cc_core.utils.Coords;
+import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.MarkableAsCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.chunk.storage.MixinChunkStorage;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
+import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.GlobalSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.SectionPosToCubeSet;
-import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import io.github.opencubicchunks.cubicchunks.server.level.CloHolder;
+import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
 import io.github.opencubicchunks.cubicchunks.server.level.progress.CloProgressListener;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
+import io.github.opencubicchunks.cubicchunks.world.level.entity.CloStatusUpdateListener;
 import net.minecraft.ReportedException;
 import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
-import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -52,6 +53,7 @@ import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LightChunkGetter;
@@ -94,6 +96,8 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
     @Shadow @Final private ChunkMap.DistanceManager distanceManager;
     @AddFieldToSets(sets = ChunkToCloSet.class, owner = @Ref(ChunkMap.class), field = @FieldSig(type = @Ref(ChunkProgressListener.class), name = "progressListener"))
     private CloProgressListener cc_progressListener;
+    @AddFieldToSets(sets = ChunkToCloSet.class, owner = @Ref(ChunkMap.class), field = @FieldSig(type = @Ref(ChunkStatusUpdateListener.class), name = "chunkStatusListener"))
+    private CloStatusUpdateListener cc_cloStatusListener;
 
     // TODO once we can target non-return locations in constructors, do this when the vanilla field is set
     @Inject(method = "<init>", at = @At("RETURN"))
@@ -102,6 +106,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
                            ChunkStatusUpdateListener chunkStatusListener, Supplier overworldDataStorage, int viewDistance, boolean sync, CallbackInfo ci) {
         if (((CanBeCubic) level).cc_isCubic()) {
             cc_progressListener = ((CloProgressListener) progressListener);
+            cc_cloStatusListener = (cloPos, fullChunkStatus) -> {}; // FIXME actually set cloStatusListener
             ((MarkableAsCubic) distanceManager).cc_setCubic();
         }
     }
@@ -268,7 +273,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
 
     // dasm + mixin
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("updateChunkScheduling(JILnet/minecraft/server/level/ChunkHolder;I)Lnet/minecraft/server/level/ChunkHolder;"))
-    @Nullable public native ChunkHolder cc_updateChunkScheduling(long chunkPos, int newLevel, @Nullable ChunkHolder holder, int oldLevel);
+    @Nullable native ChunkHolder cc_updateChunkScheduling(long chunkPos, int newLevel, @Nullable ChunkHolder holder, int oldLevel);
 
     // TODO this is a bit jank; maybe things that call this method should be altered instead?
     @Inject(method = "updateChunkScheduling", at = @At("HEAD"), cancellable = true)
@@ -289,7 +294,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
     }
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("saveAllChunks(Z)V"))
-    public native void cc_saveAllChunks(boolean flush);
+    protected native void cc_saveAllChunks(boolean flush);
 
     // P4: scheduleUnload lambda we'll want to mirror the forge API for cubes
     // FIXME remove call to forge hook in copied method
@@ -402,11 +407,17 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("markPosition(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/chunk/ChunkStatus$ChunkType;)B"))
     private native byte cc_markPosition(CloPos cloPos, ChunkStatus.ChunkType chunkType);
 
+    @Inject(method = "scheduleChunkGeneration", at = @At("HEAD"))
+    private void cc_onScheduleChunkGeneration(ChunkHolder chunkHolder, ChunkStatus chunkStatus,
+                                              CallbackInfoReturnable<CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>>> cir) {
+        assert !((CanBeCubic) this.level).cc_isCubic();
+    }
+
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("scheduleChunkGeneration(Lnet/minecraft/server/level/ChunkHolder;Lnet/minecraft/world/level/chunk/ChunkStatus;)Ljava/util/concurrent/CompletableFuture;"))
     private native CompletableFuture<Either<CloAccess, ChunkHolder.ChunkLoadingFailure>> cc_scheduleChunkGeneration(ChunkHolder chunkHolder, ChunkStatus chunkStatus);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("releaseLightTicket(Lnet/minecraft/world/level/ChunkPos;)V"))
-    public native void cc_releaseLightTicket(CloPos cloPos);
+    protected native void cc_releaseLightTicket(CloPos cloPos);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("getDependencyStatus(Lnet/minecraft/world/level/chunk/ChunkStatus;I)Lnet/minecraft/world/level/chunk/ChunkStatus;"))
     private native ChunkStatus cc_getDependencyStatus(ChunkStatus chunkStatus, int p_140264_);
@@ -417,6 +428,9 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("prepareTickingChunk(Lnet/minecraft/server/level/ChunkHolder;)Ljava/util/concurrent/CompletableFuture;"))
     public native CompletableFuture<Either<LevelClo, ChunkHolder.ChunkLoadingFailure>> cc_prepareTickingChunk(ChunkHolder holder);
+
+    @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("prepareEntityTickingChunk(Lnet/minecraft/server/level/ChunkHolder;)Ljava/util/concurrent/CompletableFuture;"))
+    public native CompletableFuture<Either<LevelClo, ChunkHolder.ChunkLoadingFailure>> cc_prepareEntityTickingChunk(ChunkHolder holder);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("onChunkReadyToSend(Lnet/minecraft/world/level/chunk/LevelChunk;)V"))
     private native void cc_onChunkReadyToSend(LevelClo cloPos);
@@ -467,7 +481,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
     private native CompletableFuture<Optional<CompoundTag>> cc_readChunk(CloPos cloPos);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("anyPlayerCloseEnoughForSpawning(Lnet/minecraft/world/level/ChunkPos;)Z"))
-    public native boolean cc_anyPlayerCloseEnoughForSpawning(CloPos cloPos);
+    native boolean cc_anyPlayerCloseEnoughForSpawning(CloPos cloPos);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("getPlayersCloseForSpawning(Lnet/minecraft/world/level/ChunkPos;)Ljava/util/List;"))
     public native List<ServerPlayer> cc_getPlayersCloseForSpawning(CloPos cloPos);
@@ -476,7 +490,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
     private native boolean cc_playerIsCloseEnoughForSpawning(ServerPlayer player, CloPos cloPos);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("updatePlayerStatus(Lnet/minecraft/server/level/ServerPlayer;Z)V"))
-    public native void cc_updatePlayerStatus(ServerPlayer player, boolean track);
+    native void cc_updatePlayerStatus(ServerPlayer player, boolean track);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("move(Lnet/minecraft/server/level/ServerPlayer;)V"))
     public native void cc_move(ServerPlayer player);
@@ -486,7 +500,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
 
     // dasm + mixin - TODO redirect for ClientboundSetChunkCacheCenterPacket construction, 2 -> 3 ints
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("applyChunkTrackingView(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/server/level/ChunkTrackingView;)V"))
-    private native void cc_applyChunkTrackingView(ServerPlayer player, ChunkTrackingView chunkTrackingView);
+    private native void cc_applyChunkTrackingView(ServerPlayer player, CloTrackingView chunkTrackingView);
 
     // dasm + mixin
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("getPlayers(Lnet/minecraft/world/level/ChunkPos;Z)Ljava/util/List;"))
@@ -503,13 +517,14 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements CubicCh
     }
 
     // Replace `SectionPos.chunk()` with `SectionPos.cc_cube()` unconditionally here
-    @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(value = @MethodSig("tick()V"), useRedirectSets = { ChunkToCloSet.class, SectionPosToCubeSet.class })
-    public native void cc_tick();
+    // FIXME what set?
+    @AddTransformToSets(GlobalSet.class) @TransformFromMethod(value = @MethodSig("tick()V"), useRedirectSets = { ChunkToCloSet.class, SectionPosToCubeSet.class })
+    protected native void cc_tick();
 
     // TODO resendBiomesForChunks - only used for FillBiomeCommand
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("onFullChunkStatusChange(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/server/level/FullChunkStatus;)V"))
-    public native void cc_onFullChunkStatusChange(CloPos cloPos, FullChunkStatus fullChunkStatus);
+    native void cc_onFullChunkStatusChange(CloPos cloPos, FullChunkStatus fullChunkStatus);
 
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("waitForLightBeforeSending(Lnet/minecraft/world/level/ChunkPos;I)V"))
     public native void cc_waitForLightBeforeSending(CloPos cloPos, int p_301130_);

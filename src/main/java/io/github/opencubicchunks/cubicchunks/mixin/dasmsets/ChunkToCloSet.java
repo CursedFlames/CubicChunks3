@@ -13,11 +13,13 @@ import io.github.notstirred.dasm.api.annotations.selector.FieldSig;
 import io.github.notstirred.dasm.api.annotations.selector.MethodSig;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
+import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.ImposterProtoClo;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.ProtoClo;
 import net.minecraft.core.Registry;
+import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -81,6 +83,10 @@ public interface ChunkToCloSet extends GlobalSet {
 
     @TypeRedirect(from = @Ref(LevelChunk.class), to = @Ref(LevelClo.class))
     interface LevelChunk_to_LevelClo_redirects {
+        // TODO inherit from parent
+        @MethodRedirect(@MethodSig("getPos()Lnet/minecraft/world/level/ChunkPos;"))
+
+        CloPos cc_getCloPos();
         @ConstructorToFactoryRedirect(@ConstructorMethodSig(args = { @Ref(Level.class), @Ref(CloPos.class) }))
         static LevelClo create(Level level, ChunkPos pos) {
             throw new IllegalStateException("this should never be called");
@@ -117,6 +123,10 @@ public interface ChunkToCloSet extends GlobalSet {
 
     @TypeRedirect(from = @Ref(ProtoChunk.class), to = @Ref(ProtoClo.class))
     interface ProtoChunk_to_ProtoClo_redirects {
+        // TODO inherit from parent
+        @MethodRedirect(@MethodSig("getPos()Lnet/minecraft/world/level/ChunkPos;"))
+        CloPos cc_getCloPos();
+
         @ConstructorToFactoryRedirect(@ConstructorMethodSig(args = { @Ref(ChunkPos.class), @Ref(UpgradeData.class), @Ref(LevelHeightAccessor.class), @Ref(Registry.class), @Ref(BlendingData.class) }))
         static ProtoClo create(CloPos cloPos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, Registry<Biome> biomeRegistry, @Nullable BlendingData blendingData) {
             throw new IllegalStateException("this should never be called");
@@ -154,5 +164,10 @@ public interface ChunkToCloSet extends GlobalSet {
 
         @MethodRedirect(@MethodSig("getWrapped()Lnet/minecraft/world/level/chunk/LevelChunk;"))
         LevelClo cc_getWrappedClo();
+    }
+
+    @TypeRedirect(from = @Ref(ChunkTrackingView.class), to = @Ref(CloTrackingView.class))
+    interface ChunkTrackingView_to_CloTrackingView_redirects {
+
     }
 }

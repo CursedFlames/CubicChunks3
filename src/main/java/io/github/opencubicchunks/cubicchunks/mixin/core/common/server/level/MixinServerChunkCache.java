@@ -3,6 +3,7 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.common.server.level;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -29,9 +30,11 @@ import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.access.common.ChunkMapAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.chunk.MixinChunkSource;
+import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.GlobalSet;
 import io.github.opencubicchunks.cubicchunks.server.level.CloHolder;
+import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicDistanceManager;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
@@ -108,8 +111,7 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
 
     @Shadow protected abstract void getFullChunk(long p_8371_, Consumer<LevelChunk> p_8372_);
 
-    // TODO inject at head once we can inject at non-return locations
-    @Inject(method = "<init>", at = @At(value = "RETURN"))
+    @Inject(method = "<init>", at = @At("io.github.opencubicchunks.cubicchunks.ConstructorSuper"))
     private void cc_onInit(ServerLevel level, LevelStorageSource.LevelStorageAccess levelStorageAccess, DataFixer fixerUpper, StructureTemplateManager structureManager, Executor dispatcher,
                         ChunkGenerator generator, int viewDistance, int simulationDistance, boolean sync, ChunkProgressListener progressListener,
                         ChunkStatusUpdateListener chunkStatusListener, Supplier overworldDataStorage, CallbackInfo ci) {
@@ -224,19 +226,21 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
         return ((CubicDistanceManager) instance).cc_runAllUpdates(chunkMap);
     }
 
-    /**
-     * In cubic levels, redirect to the cubic tickChunks method
-     */
-    @WrapWithCondition(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerChunkCache;tickChunks()V"))
-    private boolean cc_onTickChunks(ServerChunkCache instance) {
-        if (((CanBeCubic) level).cc_isCubic()) {
-            cc_tickChunks();
-            return false;
+    // FIXME jank
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    private void cc_onTick(BooleanSupplier hasTimeLeft, boolean tickChunks, CallbackInfo ci) {
+        if (this.cc_isCubic) {
+            ci.cancel();
+            cc_tick(hasTimeLeft, tickChunks);
         }
-        return true;
     }
 
+    // FIXME what set should this be in? do we even want it in a redirect set?
+    /*@AddTransformToSets(ChunkToCloSet.class)*/ @TransformFromMethod(@MethodSig("tick(Ljava/util/function/BooleanSupplier;Z)V"))
+    public native void cc_tick(BooleanSupplier hasTimeLeft, boolean tickChunks);
+
     // This could maybe be DASM, but the mixins into the copied method would likely end up being quite complex
+    @AddMethodToSets(sets = ChunkToCubeSet.class, owner = @Ref(ServerChunkCache.class), method = @MethodSig("tickChunks()V"))
     private void cc_tickChunks() {
         long i = this.level.getGameTime();
         long j = i - this.lastInhabitedUpdate;
@@ -308,6 +312,11 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
         if (chunkholder != null) {
             chunkholder.blockChanged(pos);
         }
+    }
+
+    @Inject(method = "onLightUpdate", at = @At("HEAD"), cancellable = true)
+    private void cc_onOnLightUpdate(LightLayer type, SectionPos pos, CallbackInfo ci) {
+        ci.cancel(); // TODO (P2) we just disable lighting for now
     }
 
     @Override

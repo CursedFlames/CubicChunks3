@@ -12,6 +12,7 @@ import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
+import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.GlobalSet;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
 import io.github.opencubicchunks.cubicchunks.world.entity.EntityCubePosGetter;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;

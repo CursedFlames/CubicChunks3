@@ -47,6 +47,7 @@ public abstract class MixinDistanceManager implements CubicDistanceManager, Mark
     @Shadow @Final private DistanceManager.ChunkTicketTracker ticketTracker;
     @Shadow @Final private DistanceManager.FixedPlayerDistanceChunkTracker naturalSpawnChunkCounter;
     @Shadow @Final private TickingTracker tickingTicketsTracker;
+    @Shadow @Final private DistanceManager.PlayerTicketTracker playerTicketManager;
     @Shadow @Final ChunkTaskPriorityQueueSorter ticketThrottler;
 
     @Override
@@ -55,6 +56,7 @@ public abstract class MixinDistanceManager implements CubicDistanceManager, Mark
         ((MarkableAsCubic) this.ticketTracker).cc_setCubic();
         ((MarkableAsCubic) this.naturalSpawnChunkCounter).cc_setCubic();
         ((MarkableAsCubic) this.tickingTicketsTracker).cc_setCubic();
+        ((MarkableAsCubic) this.playerTicketManager).cc_setCubic();
         ((MarkableAsCubic) this.ticketThrottler).cc_setCubic();
     }
 
@@ -106,7 +108,7 @@ public abstract class MixinDistanceManager implements CubicDistanceManager, Mark
 
     @UsedFromASM
     @AddTransformToSets(ChunkToCloSet.class) @TransformFromMethod(@MethodSig("updateChunkForced(Lnet/minecraft/world/level/ChunkPos;Z)V"))
-    public abstract void cc_updateCubeForced(CloPos pos, boolean add);
+    protected abstract void cc_updateCubeForced(CloPos pos, boolean add);
 
     // CubePos equivalents that delegate to their corresponding CloPos method
     @UsedFromASM

@@ -25,6 +25,7 @@ import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicTicketType;
 import io.github.opencubicchunks.cubicchunks.server.level.progress.CloProgressListener;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
+import io.github.opencubicchunks.cubicchunks.world.level.entity.CloStatusUpdateListener;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkTrackingView;
@@ -34,6 +35,7 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.entity.ChunkStatusUpdateListener;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
 /**
@@ -87,11 +89,14 @@ public interface GlobalSet extends ForgeSet {
         void cc_onStatusChange(CloPos chunkPosition, @Nullable ChunkStatus newStatus);
     }
 
+    @TypeRedirect(from = @Ref(ChunkStatusUpdateListener.class), to = @Ref(CloStatusUpdateListener.class))
+    interface ChunkStatusUpdateListener_to_CloStatusUpdateListener_redirects { }
+
     @TypeRedirect(from = @Ref(ChunkTrackingView.class), to = @Ref(CloTrackingView.class))
     interface ChunkTrackingView_to_CloTrackingView_redirects { }
 
     @TypeRedirect(from = @Ref(ChunkTrackingView.Positioned.class), to = @Ref(CloTrackingView.Positioned.class))
-    interface ChunkTrackingView$Positioned_to_CloTrackingView$Positioned_redirects { }
+    abstract class ChunkTrackingView$Positioned_to_CloTrackingView$Positioned_redirects { }
 
     // TODO These need to be specified explicitly for now bc of inheritance jank
     @IntraOwnerContainer(owner = @Ref(ChunkMap.DistanceManager.class))
